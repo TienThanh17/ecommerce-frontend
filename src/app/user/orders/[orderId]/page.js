@@ -1,0 +1,315 @@
+"use client";
+import React, { useEffect, useState } from "react";
+import Grid from "@mui/material/Grid";
+import Box from "@mui/material/Box";
+import {
+  handleGetOrderDetailService,
+  handleCancleOrderService,
+} from "@/services/orderService";
+import "./page.scss";
+import dayjs from "dayjs";
+import Image from "next/image";
+import Link from "next/link";
+import { toast } from "react-toastify";
+import { useDispatch, useSelector } from "react-redux";
+import { useRouter } from "next/navigation";
+import { handleChangePage } from "@/redux-toolkit/paginationSlice";
+import { logOut } from "@/redux-toolkit/userSlice";
+import { convertSlugUrl } from "@/utils/commonUtils";
+
+const currencyFormatter = new Intl.NumberFormat("vi-VN", {
+  style: "decimal",
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 0,
+});
+
+function OrdersDetail({ params }) {
+  const [orderDetailData, setOrderDetailData] = useState({});
+  const [orderStatus, setOrderStatus] = useState(null);
+  const userId = useSelector((state) => state.user.userInfo?.id);
+
+  const dispatch = useDispatch();
+  const router = useRouter();
+  let getOrderDeatil = async () => {
+    try {
+      let res = await handleGetOrderDetailService(params.orderId, userId);
+      if (res && res.code === 0) {
+        setOrderDetailData(res?.data);
+        switch (res?.data?.status) {
+          case 1:
+            setOrderStatus("Chờ xác nhận");
+            break;
+          case 2:
+            setOrderStatus("Đang giao");
+            break;
+          case 3:
+            setOrderStatus("Đã giao");
+            break;
+          case 0:
+            setOrderStatus("Đã hủy");
+            break;
+          default:
+            break;
+        }
+      }
+    } catch (error) {
+      console.log(error);
+      if (error?.response?.data?.code === -4) {
+        toast.error("Phiên bản đăng nhập hết hạn");
+        dispatch(logOut());
+      } else {
+        toast.error(error?.response?.data?.message);
+      }
+    }
+  };
+
+  useEffect(() => {
+    getOrderDeatil(params.orderId);
+  }, [params.orderId]);
+
+  let handleCancelOrder = async () => {
+    try {
+      let res = await handleCancleOrderService({
+        // userId: userId,
+        orderId: params.orderId,
+        setProductOrder: orderDetailData?.products,
+      });
+      if (res && res.code === 0) {
+        toast.success("Hủy đơn hàng thành công");
+        dispatch(handleChangePage(1));
+        router.push("/user/orders");
+      }
+    } catch (error) {
+      console.log(error);
+      if (error?.response?.data?.code === -4) {
+        toast.error("Phiên bản đăng nhập hết hạn");
+        dispatch(logOut());
+      } else {
+        toast.error(error?.response?.data?.message);
+      }
+    }
+  };
+
+  // const formatterDate = (date) => {
+  //   const dateObject = new Date(date);
+  //   const formattedTime = dayjs(dateObject).format("DD/MM/YYYY");
+  //   return formattedTime;
+  // };
+
+  return (
+    <div>
+      <div className="orderdetail">
+        <div className="information">
+          <h3 style={{ marginBottom: 6 }}>
+            Mã đơn hàng: {orderDetailData?.id}
+          </h3>
+          <h3 style={{ marginBottom: 6 }}>
+            Ngày đặt hàng: {orderDetailData?.createDate}
+          </h3>
+          <h3 style={{ marginBottom: 6 }}>
+            Tình trạng đơn hàng: {orderStatus}
+          </h3>
+        </div>
+
+        <div className="information">
+          <h3 style={{ marginBottom: 6 }}>
+            Người nhận: {orderDetailData?.username}
+          </h3>
+          <h3 style={{ marginBottom: 6 }}>
+            Số điện thoại: {orderDetailData?.phoneNumber}
+          </h3>
+          <h3 style={{ marginBottom: 6 }}>
+            Địa chỉ nhận hàng: {orderDetailData?.address}
+          </h3>
+        </div>
+
+        <div className="information">
+          <h3 style={{ marginBottom: 6 }}>Phương thức thanh toán:</h3>
+          {orderDetailData?.paymentName === "COD" ? (
+            <h4>Thanh toán khi nhận hàng (COD)</h4>
+          ) : orderDetailData?.paymentName === "PAYPAL" ? (
+            <h4>Thanh toán bằng Paypal</h4>
+          ) : (
+            <h4>Thanh toán bằng VNPAY</h4>
+          )}
+        </div>
+      </div>
+
+      <Grid container spacing={5} className="products">
+        {orderDetailData?.products?.length > 0 &&
+          orderDetailData?.products?.map((item, index) => (
+            <Grid item sm={10} md={5} key={index}>
+              <Link
+                href={`/${convertSlugUrl(
+                  item.categoryName
+                )}-${item.categoryId.toLowerCase()}/${convertSlugUrl(
+                  item.productName
+                )}-${item.productId.toLowerCase()}`}
+              >
+                <Box className="productDetail">
+                  <Image
+                    style={{ marginRight: 20, borderRadius: 20 }}
+                    src={item.imageURL}
+                    height={150}
+                    width={150}
+                    alt="thumb"
+                    className="thumbnail"
+                  ></Image>
+                  <div className="info">
+                    <div>{item.productName}</div>
+                    <div style={{ display: "flex", margin: "8px 0" }}>
+                      <div
+                        style={{
+                          color: item.discount !== 0 ? "rgba(0,0,0,.54)" : "",
+                          textDecoration:
+                            item.discount !== 0 ? "line-through" : "",
+                          marginRight: 10,
+                        }}
+                      >
+                        {currencyFormatter.format(item.price)}
+                        <span
+                          style={{
+                            textDecoration: "underline",
+                            marginLeft: 2,
+                          }}
+                        >
+                          đ
+                        </span>
+                      </div>
+                      {item.discount !== 0 ? (
+                        <div>
+                          {currencyFormatter.format(
+                            item.price - (item.price * item.discount) / 100
+                          )}
+                          <span
+                            style={{
+                              textDecoration: "underline",
+                              marginLeft: 2,
+                            }}
+                          >
+                            đ
+                          </span>
+                        </div>
+                      ) : null}
+                    </div>
+                    <div style={{ marginBottom: "8px" }}>
+                      Kích cỡ: {item.sizeName}
+                    </div>
+                    <div>Số lượng: {item.quantity}</div>
+                    <p style={{ color: "red" }}>
+                      {currencyFormatter.format(item.totalPrice)}
+                      <span
+                        style={{
+                          textDecoration: "underline",
+                          marginLeft: 2,
+                        }}
+                      >
+                        đ
+                      </span>
+                    </p>
+                  </div>
+                </Box>
+              </Link>
+            </Grid>
+          ))}
+      </Grid>
+
+      <div className="pay-contact-container">
+        <div className="pay-contact">
+          <div className="pay_discount">
+            <div className="pay">
+              <p className="txt_price">Tổng cộng:</p>
+              <div className="price">
+                {orderDetailData?.voucherId
+                  ? currencyFormatter.format(
+                      orderDetailData?.totalPrice -
+                        30000 +
+                        orderDetailData?.voucherPrice
+                    )
+                  : currencyFormatter.format(
+                      orderDetailData?.totalPrice - 30000
+                    )}
+                <span
+                  style={{
+                    textDecoration: "underline",
+                    marginLeft: 2,
+                  }}
+                >
+                  đ
+                </span>
+              </div>
+            </div>
+
+            <div className="pay">
+              <p className="txt_price">Phí vận chuyển</p>
+              <p className="price">
+                {currencyFormatter.format(30000)}
+                <span
+                  style={{
+                    textDecoration: "underline",
+                    marginLeft: 2,
+                  }}
+                >
+                  đ
+                </span>
+              </p>
+            </div>
+
+            {orderDetailData?.voucherId ? (
+              <div className="pay">
+                <p className="txt_price">Giảm giá: </p>
+                <p className="price_discount">
+                  {currencyFormatter.format(orderDetailData?.voucherPrice)}
+                  <span
+                    style={{
+                      textDecoration: "underline",
+                      marginLeft: 2,
+                    }}
+                  >
+                    đ
+                  </span>
+                </p>
+              </div>
+            ) : null}
+
+            <div className="pay">
+              <p className="txt_pay">Phải trả</p>
+              <p className="price">
+                {currencyFormatter.format(orderDetailData?.totalPrice)}
+                <span
+                  style={{
+                    textDecoration: "underline",
+                    marginLeft: 2,
+                  }}
+                >
+                  đ
+                </span>
+              </p>
+            </div>
+          </div>
+
+          <div
+            className="btn_contact"
+            style={{
+              justifyContent:
+                orderDetailData?.status !== 1 ? "center" : "space-between",
+            }}
+          >
+            {orderDetailData?.status === 1 ? (
+              <button onClick={handleCancelOrder}>Xác nhận hủy</button>
+            ) : null}
+            <button>
+              <a
+                style={{ color: "white" }}
+                href="https://www.facebook.com/profile.php?id=100075108746922"
+              >
+                Liên hệ shop
+              </a>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+export default OrdersDetail;
