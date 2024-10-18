@@ -315,7 +315,7 @@ const Cart = () => {
         voucherId: voucherId,
         payment: paymentValue,
         totalPrice: pricePayment,
-        deliveryAddress: userInfo.address,
+        address: userInfo.address,
         status: 1,
       });
       if (res && res.code === 0) {
